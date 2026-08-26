@@ -1,0 +1,97 @@
+@page "/purchase-orders"
+@using Microsoft.EntityFrameworkCore
+@using PurchaseOrders.Data
+@using PurchaseOrders.Data.Models
+@inject IDbContextFactory<PurchasingDbContext> DbFactory
+
+<PageTitle>Purchase orders - Purchase Order Manager</PageTitle>
+
+<div class="list-header">
+    <h1>Purchase orders</h1>
+    <a class="btn btn-primary" href="purchase-orders/new">New purchase order</a>
+</div>
+
+@if (orders is null)
+{
+    <p class="status-line">Loading...</p>
+}
+else if (orders.Count == 0)
+{
+    <div class="empty-state">
+        <p><strong>No open purchase orders.</strong></p>
+        <p>Raise one and add the lines you are buying.</p>
+        <a class="btn btn-primary" href="purchase-orders/new">New purchase order</a>
+    </div>
+}
+else
+{
+    <p class="status-line">
+        @orders.Count open @(orders.Count == 1 ? "order" : "orders") ·
+        @orders.Sum(o => o.Total).ToString("C") on order
+    </p>
+
+    <table class="po-table">
+        <thead>
+            <tr>
+                <th>PO</th>
+                <th>Supplier</th>
+                <th class="numeric">Lines</th>
+                <th class="numeric">Received</th>
+                <th class="numeric">Total</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in orders)
+            {
+                <tr>
+                    <td data-label="PO">
+                        <a class="po-number" href="@($"purchase-orders/{order.Id}")">@order.PoNumber</a>
+                    </td>
+                    <td data-label="Supplier">@order.Supplier?.Name</td>
+                    <td data-label="Lines" class="numeric">@order.Lines.Count</td>
+                    <td data-label="Received" class="numeric">@order.TotalReceived / @order.TotalOrdered</td>
+                    <td data-label="Total" class="numeric">@order.Total.ToString("C")</td>
+                    <td data-label="Status">
+                        <span class="receipt-tag @ReceiptClass(order.Receipt)">@ReceiptLabel(order.Receipt)</span>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<PurchaseOrder>? orders;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Include the lines as well as the supplier - the totals on this screen are
+        // worked out from the lines, so they have to come back with the order.
+        orders = await db.PurchaseOrders
+            .AsNoTracking()
+            .Include(o => o.Supplier)
+            .Include(o => o.Lines)
+            .Where(o => !o.IsCancelled)
+            .OrderByDescending(o => o.OrderedUtc)
+            .ToListAsync();
+    }
+
+    private static string ReceiptLabel(ReceiptState state) => state switch
+    {
+        ReceiptState.Empty => "No lines",
+        ReceiptState.Awaiting => "Awaiting",
+        ReceiptState.Partial => "Part received",
+        _ => "Complete"
+    };
+
+    private static string ReceiptClass(ReceiptState state) => state switch
+    {
+        ReceiptState.Empty => "is-empty",
+        ReceiptState.Awaiting => "is-awaiting",
+        ReceiptState.Partial => "is-partial",
+        _ => "is-complete"
+    };
+}
