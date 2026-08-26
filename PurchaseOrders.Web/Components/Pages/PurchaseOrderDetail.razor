@@ -1,0 +1,271 @@
+@page "/purchase-orders/{Id:int}"
+@using Microsoft.EntityFrameworkCore
+@using PurchaseOrders.Data
+@using PurchaseOrders.Data.Models
+@inject IDbContextFactory<PurchasingDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>@(order?.PoNumber ?? "Purchase order") - Purchase Order Manager</PageTitle>
+
+@if (order is null)
+{
+    <p class="status-line">Loading...</p>
+}
+else
+{
+    <div class="list-header">
+        <div>
+            <h1>@order.PoNumber</h1>
+            <p class="status-line">
+                @order.Supplier?.Name ·
+                ordered @order.OrderedUtc.ToString("d MMM yyyy")
+                @if (order.ExpectedUtc is not null)
+                {
+                    <text> · expected @order.ExpectedUtc.Value.ToString("d MMM yyyy")</text>
+                }
+            </p>
+        </div>
+        <div class="header-actions">
+            <a class="btn btn-secondary" href="purchase-orders">Back to list</a>
+            <a class="btn btn-secondary" href="@($"purchase-orders/edit/{order.Id}")">Edit header</a>
+        </div>
+    </div>
+
+    <div class="summary-strip">
+        <div><span class="summary-label">Lines</span><strong>@order.Lines.Count</strong></div>
+        <div><span class="summary-label">Ordered</span><strong>@order.TotalOrdered</strong></div>
+        <div><span class="summary-label">Received</span><strong>@order.TotalReceived</strong></div>
+        <div><span class="summary-label">Total</span><strong>@order.Total.ToString("C")</strong></div>
+        <div><span class="summary-label">Status</span><strong>@ReceiptLabel(order.Receipt)</strong></div>
+    </div>
+
+    @if (errorMessage is not null)
+    {
+        <div class="alert alert-danger" role="alert">@errorMessage</div>
+    }
+
+    <h2>Lines</h2>
+
+    @if (order.Lines.Count == 0)
+    {
+        <p class="status-line">No lines yet. Add the first one below.</p>
+    }
+    else
+    {
+        <table class="po-table">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Description</th>
+                    <th class="numeric">Ordered</th>
+                    <th class="numeric">Unit cost</th>
+                    <th class="numeric">Line total</th>
+                    <th class="numeric">Received</th>
+                    <th><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in order.Lines)
+                {
+                    <tr class="@(line.IsFullyReceived ? "line-done" : null)">
+                        <td data-label="SKU"><span class="sku">@line.Sku</span></td>
+                        <td data-label="Description">@line.Description</td>
+                        <td data-label="Ordered" class="numeric">@line.QuantityOrdered</td>
+                        <td data-label="Unit cost" class="numeric">@line.UnitCost.ToString("C")</td>
+                        <td data-label="Line total" class="numeric">@line.LineTotal.ToString("C")</td>
+                        <td data-label="Received" class="numeric">
+                            @line.QuantityReceived
+                            @if (!line.IsFullyReceived)
+                            {
+                                <span class="outstanding">(@line.Outstanding out)</span>
+                            }
+                        </td>
+                        <td data-label="" class="actions">
+                            @if (!line.IsFullyReceived)
+                            {
+                                <input type="number" class="receive-input" min="1" max="@line.Outstanding"
+                                       aria-label="Quantity to receive"
+                                       value="@(receiveQty.TryGetValue(line.Id, out var q) ? q : line.Outstanding)"
+                                       @onchange="e => SetReceiveQty(line.Id, e.Value?.ToString())" />
+                                <button type="button" class="btn btn-secondary btn-sm"
+                                        @onclick="() => ReceiveAsync(line.Id)">Receive</button>
+                            }
+                            else
+                            {
+                                <span class="line-complete">Complete</span>
+                            }
+                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                    @onclick="() => RemoveLineAsync(line.Id)">Remove</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (order.Receipt != ReceiptState.Complete)
+        {
+            <p class="bulk-row">
+                <button type="button" class="btn btn-secondary" @onclick="ReceiveAllAsync">
+                    Receive all outstanding
+                </button>
+            </p>
+        }
+    }
+
+    <h2>Add a line</h2>
+
+    <EditForm Model="newLine" OnValidSubmit="AddLineAsync" FormName="add-line" class="line-form">
+        <DataAnnotationsValidator />
+
+        <div class="line-form-grid">
+            <div class="form-row">
+                <label for="sku">SKU</label>
+                <InputText id="sku" class="form-control" @bind-Value="newLine.Sku" />
+                <ValidationMessage For="() => newLine.Sku" />
+            </div>
+            <div class="form-row form-row-wide">
+                <label for="description">Description</label>
+                <InputText id="description" class="form-control" @bind-Value="newLine.Description" />
+                <ValidationMessage For="() => newLine.Description" />
+            </div>
+            <div class="form-row">
+                <label for="qty">Quantity</label>
+                <InputNumber id="qty" class="form-control" @bind-Value="newLine.QuantityOrdered" />
+                <ValidationMessage For="() => newLine.QuantityOrdered" />
+            </div>
+            <div class="form-row">
+                <label for="cost">Unit cost</label>
+                <InputNumber id="cost" class="form-control" step="0.01" @bind-Value="newLine.UnitCost" />
+                <ValidationMessage For="() => newLine.UnitCost" />
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add line</button>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private PurchaseOrder? order;
+    private PurchaseOrderLine newLine = new();
+    private readonly Dictionary<int, int> receiveQty = new();
+    private string? errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        order = await db.PurchaseOrders
+            .AsNoTracking()
+            .Include(o => o.Supplier)
+            .Include(o => o.Lines)
+            .FirstOrDefaultAsync(o => o.Id == Id);
+
+        if (order is null)
+        {
+            // The id matched nothing. Send them back rather than showing a broken page.
+            Nav.NavigateTo("/purchase-orders");
+        }
+    }
+
+    private void SetReceiveQty(int lineId, string? raw)
+    {
+        receiveQty[lineId] = int.TryParse(raw, out var value) ? value : 0;
+    }
+
+    private async Task AddLineAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        newLine.PurchaseOrderId = Id;
+        db.PurchaseOrderLines.Add(newLine);
+        await db.SaveChangesAsync();
+
+        newLine = new PurchaseOrderLine();
+        await LoadAsync();
+    }
+
+    private async Task ReceiveAsync(int lineId)
+    {
+        errorMessage = null;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var line = await db.PurchaseOrderLines.FirstOrDefaultAsync(l => l.Id == lineId);
+
+        if (line is null)
+        {
+            return;
+        }
+
+        var wanted = receiveQty.TryGetValue(lineId, out var q) ? q : line.Outstanding;
+
+        if (wanted <= 0)
+        {
+            errorMessage = "Enter how many arrived before receiving a line.";
+            return;
+        }
+
+        // Never let received run past ordered, whatever the box says.
+        var accepted = Math.Min(wanted, line.Outstanding);
+
+        if (accepted < wanted)
+        {
+            errorMessage = $"Only {line.Outstanding} outstanding on {line.Sku} - received that many.";
+        }
+
+        line.QuantityReceived += accepted;
+        await db.SaveChangesAsync();
+
+        receiveQty.Remove(lineId);
+        await LoadAsync();
+    }
+
+    private async Task ReceiveAllAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var lines = await db.PurchaseOrderLines
+            .Where(l => l.PurchaseOrderId == Id)
+            .ToListAsync();
+
+        foreach (var line in lines)
+        {
+            line.QuantityReceived = line.QuantityOrdered;
+        }
+
+        await db.SaveChangesAsync();
+        receiveQty.Clear();
+        await LoadAsync();
+    }
+
+    private async Task RemoveLineAsync(int lineId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var line = await db.PurchaseOrderLines.FirstOrDefaultAsync(l => l.Id == lineId);
+
+        if (line is not null)
+        {
+            db.PurchaseOrderLines.Remove(line);
+            await db.SaveChangesAsync();
+        }
+
+        await LoadAsync();
+    }
+
+    private static string ReceiptLabel(ReceiptState state) => state switch
+    {
+        ReceiptState.Empty => "No lines",
+        ReceiptState.Awaiting => "Awaiting",
+        ReceiptState.Partial => "Part received",
+        _ => "Complete"
+    };
+}

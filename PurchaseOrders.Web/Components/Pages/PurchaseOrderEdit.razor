@@ -1,0 +1,163 @@
+@page "/purchase-orders/new"
+@page "/purchase-orders/edit/{Id:int}"
+@using Microsoft.EntityFrameworkCore
+@using PurchaseOrders.Data
+@using PurchaseOrders.Data.Models
+@inject IDbContextFactory<PurchasingDbContext> DbFactory
+@inject NavigationManager Nav
+
+<PageTitle>@(Id is null ? "New purchase order" : "Edit purchase order") - Purchase Order Manager</PageTitle>
+
+<h1>@(Id is null ? "New purchase order" : "Edit purchase order")</h1>
+
+@if (order is null)
+{
+    <p class="status-line">Loading...</p>
+}
+else
+{
+    <EditForm Model="order" OnValidSubmit="SaveAsync" FormName="po-form" class="po-form">
+        <DataAnnotationsValidator />
+
+        @if (errorMessage is not null)
+        {
+            <div class="alert alert-danger" role="alert">@errorMessage</div>
+        }
+
+        <div class="form-row">
+            <label for="poNumber">PO number</label>
+            <InputText id="poNumber" class="form-control" @bind-Value="order.PoNumber" />
+            <ValidationMessage For="() => order.PoNumber" />
+        </div>
+
+        <div class="form-row">
+            <label for="supplier">Supplier</label>
+            <InputSelect id="supplier" class="form-control" @bind-Value="order.SupplierId">
+                <option value="0">-- choose a supplier --</option>
+                @foreach (var supplier in suppliers)
+                {
+                    <option value="@supplier.Id">@supplier.Name</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="() => order.SupplierId" />
+        </div>
+
+        <div class="form-row">
+            <label for="expected">Expected date</label>
+            <InputDate id="expected" class="form-control" @bind-Value="order.ExpectedUtc" />
+            <ValidationMessage For="() => order.ExpectedUtc" />
+        </div>
+
+        <div class="form-row">
+            <label for="notes">Notes</label>
+            <InputTextArea id="notes" class="form-control" rows="3" @bind-Value="order.Notes" />
+            <ValidationMessage For="() => order.Notes" />
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                @(isSaving ? "Saving..." : "Save")
+            </button>
+            <a class="btn btn-secondary" href="purchase-orders">Cancel</a>
+
+            @if (Id is not null)
+            {
+                @if (confirmCancel)
+                {
+                    <span class="confirm-text">Cancel this purchase order?</span>
+                    <button type="button" class="btn btn-danger btn-sm" @onclick="CancelOrderAsync">Yes, cancel it</button>
+                    <button type="button" class="btn btn-link btn-sm" @onclick="() => confirmCancel = false">Keep it</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-danger" @onclick="() => confirmCancel = true">Cancel order</button>
+                }
+            }
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private PurchaseOrder? order;
+    private List<Supplier> suppliers = new();
+    private string? errorMessage;
+    private bool isSaving;
+    private bool confirmCancel;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        suppliers = await db.Suppliers.AsNoTracking().OrderBy(s => s.Name).ToListAsync();
+
+        if (Id is null)
+        {
+            order = new PurchaseOrder();
+            return;
+        }
+
+        order = await db.PurchaseOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == Id);
+
+        if (order is null)
+        {
+            // The id matched nothing. Send them back rather than showing a broken form.
+            Nav.NavigateTo("/purchase-orders");
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        errorMessage = null;
+        isSaving = true;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            var isNew = order!.Id == 0;
+
+            if (isNew)
+            {
+                db.PurchaseOrders.Add(order);
+            }
+            else
+            {
+                db.PurchaseOrders.Update(order);
+            }
+
+            await db.SaveChangesAsync();
+
+            // A new order has no lines yet, so open it straight away rather than
+            // dropping the user back on a list where it looks empty.
+            Nav.NavigateTo(isNew ? $"/purchase-orders/{order.Id}" : "/purchase-orders");
+        }
+        catch (DbUpdateException)
+        {
+            // The unique index rejected it. Almost always a duplicate PO number.
+            errorMessage = $"PO number '{order!.PoNumber}' is already in use. Pick a different one.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task CancelOrderAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var existing = await db.PurchaseOrders.FirstOrDefaultAsync(o => o.Id == Id);
+
+        if (existing is not null)
+        {
+            // Hide it, do not destroy it. The list query already filters cancelled orders.
+            existing.IsCancelled = true;
+            await db.SaveChangesAsync();
+        }
+
+        Nav.NavigateTo("/purchase-orders");
+    }
+}
