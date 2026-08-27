@@ -6,59 +6,76 @@
 
 <PageTitle>Purchase orders - Purchase Order Manager</PageTitle>
 
-<div class="list-header">
-    <h1>Purchase orders</h1>
-    <a class="btn btn-primary" href="purchase-orders/new">New purchase order</a>
+<div class="d-flex flex-wrap align-center justify-space-between mb-4 gap-3">
+    <div>
+        <MudText Typo="Typo.h5">Purchase orders</MudText>
+        @if (orders is not null)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @orders.Count open @(orders.Count == 1 ? "order" : "orders") ·
+                @orders.Sum(o => o.Total).ToString("C") on order
+            </MudText>
+        }
+    </div>
+    <MudButton Href="/purchase-orders/new" Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Outlined.Add">
+        New purchase order
+    </MudButton>
 </div>
 
 @if (orders is null)
 {
-    <p class="status-line">Loading...</p>
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
 }
 else if (orders.Count == 0)
 {
-    <div class="empty-state">
-        <p><strong>No open purchase orders.</strong></p>
-        <p>Raise one and add the lines you are buying.</p>
-        <a class="btn btn-primary" href="purchase-orders/new">New purchase order</a>
-    </div>
+    <MudPaper Elevation="0" Class="pa-8 d-flex flex-column align-center"
+              Style="border:1px dashed var(--mud-palette-divider);">
+        <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Large" Color="Color.Secondary" />
+        <MudText Typo="Typo.h6" Class="mt-3">No open purchase orders</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Raise one and add the lines you are buying.
+        </MudText>
+        <MudButton Href="/purchase-orders/new" Variant="Variant.Filled" Color="Color.Primary">
+            New purchase order
+        </MudButton>
+    </MudPaper>
 }
 else
 {
-    <p class="status-line">
-        @orders.Count open @(orders.Count == 1 ? "order" : "orders") ·
-        @orders.Sum(o => o.Total).ToString("C") on order
-    </p>
-
-    <table class="po-table">
-        <thead>
-            <tr>
-                <th>PO</th>
-                <th>Supplier</th>
-                <th class="numeric">Lines</th>
-                <th class="numeric">Received</th>
-                <th class="numeric">Total</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var order in orders)
-            {
-                <tr>
-                    <td data-label="PO">
-                        <a class="po-number" href="@($"purchase-orders/{order.Id}")">@order.PoNumber</a>
-                    </td>
-                    <td data-label="Supplier">@order.Supplier?.Name</td>
-                    <td data-label="Lines" class="numeric">@order.Lines.Count</td>
-                    <td data-label="Received" class="numeric">@order.TotalReceived / @order.TotalOrdered</td>
-                    <td data-label="Total" class="numeric">@order.Total.ToString("C")</td>
-                    <td data-label="Status">
-                        <span class="receipt-tag @ReceiptClass(order.Receipt)">@ReceiptLabel(order.Receipt)</span>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <MudPaper Elevation="0" Style="border:1px solid var(--mud-palette-divider);">
+        <MudTable Items="orders" Hover="true" Dense="true" Striped="true"
+                  Breakpoint="Breakpoint.Sm" Elevation="0">
+            <HeaderContent>
+                <MudTh>PO</MudTh>
+                <MudTh>Supplier</MudTh>
+                <MudTh Style="text-align:right">Lines</MudTh>
+                <MudTh Style="text-align:right">Received</MudTh>
+                <MudTh Style="text-align:right">Total</MudTh>
+                <MudTh>Status</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="PO">
+                    <MudLink Href="@($"/purchase-orders/{context.Id}")"
+                             Style="font-family:Consolas,monospace;font-weight:600;">
+                        @context.PoNumber
+                    </MudLink>
+                </MudTd>
+                <MudTd DataLabel="Supplier">@context.Supplier?.Name</MudTd>
+                <MudTd DataLabel="Lines" Style="text-align:right">@context.Lines.Count</MudTd>
+                <MudTd DataLabel="Received" Style="text-align:right">
+                    @context.TotalReceived / @context.TotalOrdered
+                </MudTd>
+                <MudTd DataLabel="Total" Style="text-align:right">@context.Total.ToString("C")</MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                             Color="@ReceiptColor(context.Receipt)">
+                        @ReceiptLabel(context.Receipt)
+                    </MudChip>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
 }
 
 @code {
@@ -87,11 +104,11 @@ else
         _ => "Complete"
     };
 
-    private static string ReceiptClass(ReceiptState state) => state switch
+    private static Color ReceiptColor(ReceiptState state) => state switch
     {
-        ReceiptState.Empty => "is-empty",
-        ReceiptState.Awaiting => "is-awaiting",
-        ReceiptState.Partial => "is-partial",
-        _ => "is-complete"
+        ReceiptState.Empty => Color.Default,
+        ReceiptState.Awaiting => Color.Info,
+        ReceiptState.Partial => Color.Warning,
+        _ => Color.Success
     };
 }

@@ -9,139 +9,172 @@
 
 @if (order is null)
 {
-    <p class="status-line">Loading...</p>
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
 }
 else
 {
-    <div class="list-header">
+    <div class="d-flex flex-wrap align-center justify-space-between mb-4 gap-3">
         <div>
-            <h1>@order.PoNumber</h1>
-            <p class="status-line">
-                @order.Supplier?.Name ·
-                ordered @order.OrderedUtc.ToString("d MMM yyyy")
+            <MudText Typo="Typo.h5" Style="font-family:Consolas,monospace;">@order.PoNumber</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @order.Supplier?.Name · ordered @order.OrderedUtc.ToString("d MMM yyyy")
                 @if (order.ExpectedUtc is not null)
                 {
                     <text> · expected @order.ExpectedUtc.Value.ToString("d MMM yyyy")</text>
                 }
-            </p>
+            </MudText>
         </div>
-        <div class="header-actions">
-            <a class="btn btn-secondary" href="purchase-orders">Back to list</a>
-            <a class="btn btn-secondary" href="@($"purchase-orders/edit/{order.Id}")">Edit header</a>
+        <div class="d-flex gap-2">
+            <MudButton Href="/purchase-orders" Variant="Variant.Text"
+                       StartIcon="@Icons.Material.Outlined.ArrowBack">Back</MudButton>
+            <MudButton Href="@($"/purchase-orders/edit/{order.Id}")" Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Outlined.Edit">Edit header</MudButton>
         </div>
     </div>
 
-    <div class="summary-strip">
-        <div><span class="summary-label">Lines</span><strong>@order.Lines.Count</strong></div>
-        <div><span class="summary-label">Ordered</span><strong>@order.TotalOrdered</strong></div>
-        <div><span class="summary-label">Received</span><strong>@order.TotalReceived</strong></div>
-        <div><span class="summary-label">Total</span><strong>@order.Total.ToString("C")</strong></div>
-        <div><span class="summary-label">Status</span><strong>@ReceiptLabel(order.Receipt)</strong></div>
-    </div>
+    <MudPaper Elevation="0" Class="pa-4 mb-5" Style="border:1px solid var(--mud-palette-divider);">
+        <MudGrid Spacing="2">
+            <MudItem xs="6" sm="4" md="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">LINES</MudText>
+                <MudText Typo="Typo.h6">@order.Lines.Count</MudText>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">ORDERED</MudText>
+                <MudText Typo="Typo.h6">@order.TotalOrdered</MudText>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">RECEIVED</MudText>
+                <MudText Typo="Typo.h6">@order.TotalReceived</MudText>
+            </MudItem>
+            <MudItem xs="6" sm="4" md="3">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">TOTAL</MudText>
+                <MudText Typo="Typo.h6" Color="Color.Secondary">@order.Total.ToString("C")</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="8" md="3">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">STATUS</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@ReceiptColor(order.Receipt)">
+                    @ReceiptLabel(order.Receipt)
+                </MudChip>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
 
     @if (errorMessage is not null)
     {
-        <div class="alert alert-danger" role="alert">@errorMessage</div>
+        <MudAlert Severity="Severity.Warning" Class="mb-4" Dense="true">@errorMessage</MudAlert>
     }
 
-    <h2>Lines</h2>
+    <MudText Typo="Typo.h6" Class="mb-2">Lines</MudText>
 
     @if (order.Lines.Count == 0)
     {
-        <p class="status-line">No lines yet. Add the first one below.</p>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            No lines yet. Add the first one below.
+        </MudText>
     }
     else
     {
-        <table class="po-table">
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Description</th>
-                    <th class="numeric">Ordered</th>
-                    <th class="numeric">Unit cost</th>
-                    <th class="numeric">Line total</th>
-                    <th class="numeric">Received</th>
-                    <th><span class="visually-hidden">Actions</span></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var line in order.Lines)
-                {
-                    <tr class="@(line.IsFullyReceived ? "line-done" : null)">
-                        <td data-label="SKU"><span class="sku">@line.Sku</span></td>
-                        <td data-label="Description">@line.Description</td>
-                        <td data-label="Ordered" class="numeric">@line.QuantityOrdered</td>
-                        <td data-label="Unit cost" class="numeric">@line.UnitCost.ToString("C")</td>
-                        <td data-label="Line total" class="numeric">@line.LineTotal.ToString("C")</td>
-                        <td data-label="Received" class="numeric">
-                            @line.QuantityReceived
-                            @if (!line.IsFullyReceived)
-                            {
-                                <span class="outstanding">(@line.Outstanding out)</span>
-                            }
-                        </td>
-                        <td data-label="" class="actions">
-                            @if (!line.IsFullyReceived)
-                            {
-                                <input type="number" class="receive-input" min="1" max="@line.Outstanding"
-                                       aria-label="Quantity to receive"
-                                       value="@(receiveQty.TryGetValue(line.Id, out var q) ? q : line.Outstanding)"
-                                       @onchange="e => SetReceiveQty(line.Id, e.Value?.ToString())" />
-                                <button type="button" class="btn btn-secondary btn-sm"
-                                        @onclick="() => ReceiveAsync(line.Id)">Receive</button>
-                            }
-                            else
-                            {
-                                <span class="line-complete">Complete</span>
-                            }
-                            <button type="button" class="btn btn-outline-danger btn-sm"
-                                    @onclick="() => RemoveLineAsync(line.Id)">Remove</button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <MudPaper Elevation="0" Class="mb-3" Style="border:1px solid var(--mud-palette-divider);">
+            <MudTable Items="order.Lines" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                <HeaderContent>
+                    <MudTh>SKU</MudTh>
+                    <MudTh>Description</MudTh>
+                    <MudTh Style="text-align:right">Ordered</MudTh>
+                    <MudTh Style="text-align:right">Unit cost</MudTh>
+                    <MudTh Style="text-align:right">Line total</MudTh>
+                    <MudTh Style="text-align:right">Received</MudTh>
+                    <MudTh Style="text-align:right">Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="SKU">
+                        <MudText Typo="Typo.body2" Style="font-family:Consolas,monospace;">@context.Sku</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Description">@context.Description</MudTd>
+                    <MudTd DataLabel="Ordered" Style="text-align:right">@context.QuantityOrdered</MudTd>
+                    <MudTd DataLabel="Unit cost" Style="text-align:right">@context.UnitCost.ToString("C")</MudTd>
+                    <MudTd DataLabel="Line total" Style="text-align:right">@context.LineTotal.ToString("C")</MudTd>
+                    <MudTd DataLabel="Received" Style="text-align:right">
+                        @context.QuantityReceived
+                        @if (!context.IsFullyReceived)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Warning" Class="ml-1">
+                                (@context.Outstanding out)
+                            </MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="" Style="text-align:right">
+                        @if (!context.IsFullyReceived)
+                        {
+                            <div class="d-flex align-center justify-end gap-1">
+                                <MudNumericField T="int" Value="@GetReceiveQty(context)"
+                                                 ValueChanged="@(v => receiveQty[context.Id] = v)"
+                                                 Min="1" Max="@context.Outstanding" Margin="Margin.Dense"
+                                                 Variant="Variant.Outlined" Style="width:5.5rem;"
+                                                 HideSpinButtons="true" />
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           OnClick="@(() => ReceiveAsync(context.Id))">Receive</MudButton>
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                               Color="Color.Error" aria-label="Remove line"
+                                               OnClick="@(() => RemoveLineAsync(context.Id))" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-center justify-end gap-1">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                                    Complete
+                                </MudChip>
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small"
+                                               Color="Color.Error" aria-label="Remove line"
+                                               OnClick="@(() => RemoveLineAsync(context.Id))" />
+                            </div>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
 
         @if (order.Receipt != ReceiptState.Complete)
         {
-            <p class="bulk-row">
-                <button type="button" class="btn btn-secondary" @onclick="ReceiveAllAsync">
-                    Receive all outstanding
-                </button>
-            </p>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mb-5"
+                       StartIcon="@Icons.Material.Outlined.DoneAll" OnClick="ReceiveAllAsync">
+                Receive all outstanding
+            </MudButton>
         }
     }
 
-    <h2>Add a line</h2>
+    <MudText Typo="Typo.h6" Class="mb-2">Add a line</MudText>
 
-    <EditForm Model="newLine" OnValidSubmit="AddLineAsync" FormName="add-line" class="line-form">
-        <DataAnnotationsValidator />
+    <MudPaper Elevation="0" Class="pa-4" Style="border:1px solid var(--mud-palette-divider);">
+        <EditForm Model="newLine" OnValidSubmit="AddLineAsync" FormName="add-line">
+            <DataAnnotationsValidator />
 
-        <div class="line-form-grid">
-            <div class="form-row">
-                <label for="sku">SKU</label>
-                <InputText id="sku" class="form-control" @bind-Value="newLine.Sku" />
-                <ValidationMessage For="() => newLine.Sku" />
-            </div>
-            <div class="form-row form-row-wide">
-                <label for="description">Description</label>
-                <InputText id="description" class="form-control" @bind-Value="newLine.Description" />
-                <ValidationMessage For="() => newLine.Description" />
-            </div>
-            <div class="form-row">
-                <label for="qty">Quantity</label>
-                <InputNumber id="qty" class="form-control" @bind-Value="newLine.QuantityOrdered" />
-                <ValidationMessage For="() => newLine.QuantityOrdered" />
-            </div>
-            <div class="form-row">
-                <label for="cost">Unit cost</label>
-                <InputNumber id="cost" class="form-control" step="0.01" @bind-Value="newLine.UnitCost" />
-                <ValidationMessage For="() => newLine.UnitCost" />
-            </div>
-        </div>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="3">
+                    <MudTextField @bind-Value="newLine.Sku" Label="SKU" For="() => newLine.Sku"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="5">
+                    <MudTextField @bind-Value="newLine.Description" Label="Description" For="() => newLine.Description"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudNumericField @bind-Value="newLine.QuantityOrdered" Label="Quantity"
+                                     For="() => newLine.QuantityOrdered"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MudNumericField @bind-Value="newLine.UnitCost" Label="Unit cost" For="() => newLine.UnitCost"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Step="0.01M" Format="F2" />
+                </MudItem>
+            </MudGrid>
 
-        <button type="submit" class="btn btn-primary">Add line</button>
-    </EditForm>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-3"
+                       StartIcon="@Icons.Material.Outlined.Add">
+                Add line
+            </MudButton>
+        </EditForm>
+    </MudPaper>
 }
 
 @code {
@@ -175,10 +208,8 @@ else
         }
     }
 
-    private void SetReceiveQty(int lineId, string? raw)
-    {
-        receiveQty[lineId] = int.TryParse(raw, out var value) ? value : 0;
-    }
+    private int GetReceiveQty(PurchaseOrderLine line) =>
+        receiveQty.TryGetValue(line.Id, out var q) ? q : line.Outstanding;
 
     private async Task AddLineAsync()
     {
@@ -267,5 +298,13 @@ else
         ReceiptState.Awaiting => "Awaiting",
         ReceiptState.Partial => "Part received",
         _ => "Complete"
+    };
+
+    private static Color ReceiptColor(ReceiptState state) => state switch
+    {
+        ReceiptState.Empty => Color.Default,
+        ReceiptState.Awaiting => Color.Info,
+        ReceiptState.Partial => Color.Warning,
+        _ => Color.Success
     };
 }

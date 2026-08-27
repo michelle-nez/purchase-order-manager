@@ -8,73 +8,68 @@
 
 <PageTitle>@(Id is null ? "New purchase order" : "Edit purchase order") - Purchase Order Manager</PageTitle>
 
-<h1>@(Id is null ? "New purchase order" : "Edit purchase order")</h1>
+<MudText Typo="Typo.h5" Class="mb-4">@(Id is null ? "New purchase order" : "Edit purchase order")</MudText>
 
 @if (order is null)
 {
-    <p class="status-line">Loading...</p>
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
 }
 else
 {
-    <EditForm Model="order" OnValidSubmit="SaveAsync" FormName="po-form" class="po-form">
-        <DataAnnotationsValidator />
+    <MudPaper Elevation="0" Class="pa-6" Style="max-width:560px;border:1px solid var(--mud-palette-divider);">
+        <EditForm Model="order" OnValidSubmit="SaveAsync" FormName="po-form">
+            <DataAnnotationsValidator />
 
-        @if (errorMessage is not null)
-        {
-            <div class="alert alert-danger" role="alert">@errorMessage</div>
-        }
+            @if (errorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4" Dense="true">@errorMessage</MudAlert>
+            }
 
-        <div class="form-row">
-            <label for="poNumber">PO number</label>
-            <InputText id="poNumber" class="form-control" @bind-Value="order.PoNumber" />
-            <ValidationMessage For="() => order.PoNumber" />
-        </div>
+            <MudTextField @bind-Value="order.PoNumber" Label="PO number" For="() => order.PoNumber"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
 
-        <div class="form-row">
-            <label for="supplier">Supplier</label>
-            <InputSelect id="supplier" class="form-control" @bind-Value="order.SupplierId">
-                <option value="0">-- choose a supplier --</option>
+            <MudSelect @bind-Value="order.SupplierId" Label="Supplier" For="() => order.SupplierId"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                <MudSelectItem T="int" Value="0">-- choose a supplier --</MudSelectItem>
                 @foreach (var supplier in suppliers)
                 {
-                    <option value="@supplier.Id">@supplier.Name</option>
+                    <MudSelectItem T="int" Value="@supplier.Id">@supplier.Name</MudSelectItem>
                 }
-            </InputSelect>
-            <ValidationMessage For="() => order.SupplierId" />
-        </div>
+            </MudSelect>
 
-        <div class="form-row">
-            <label for="expected">Expected date</label>
-            <InputDate id="expected" class="form-control" @bind-Value="order.ExpectedUtc" />
-            <ValidationMessage For="() => order.ExpectedUtc" />
-        </div>
+            <MudDatePicker @bind-Date="order.ExpectedUtc" Label="Expected date"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
 
-        <div class="form-row">
-            <label for="notes">Notes</label>
-            <InputTextArea id="notes" class="form-control" rows="3" @bind-Value="order.Notes" />
-            <ValidationMessage For="() => order.Notes" />
-        </div>
+            <MudTextField @bind-Value="order.Notes" Label="Notes" For="() => order.Notes"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" Class="mb-4" />
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary" disabled="@isSaving">
-                @(isSaving ? "Saving..." : "Save")
-            </button>
-            <a class="btn btn-secondary" href="purchase-orders">Cancel</a>
+            <div class="d-flex flex-wrap align-center gap-2">
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="isSaving">
+                    @(isSaving ? "Saving..." : "Save")
+                </MudButton>
+                <MudButton Href="/purchase-orders" Variant="Variant.Text">Cancel</MudButton>
 
-            @if (Id is not null)
-            {
-                @if (confirmCancel)
+                @if (Id is not null)
                 {
-                    <span class="confirm-text">Cancel this purchase order?</span>
-                    <button type="button" class="btn btn-danger btn-sm" @onclick="CancelOrderAsync">Yes, cancel it</button>
-                    <button type="button" class="btn btn-link btn-sm" @onclick="() => confirmCancel = false">Keep it</button>
+                    <MudSpacer />
+                    @if (confirmCancel)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error">Cancel this order?</MudText>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error"
+                                   OnClick="CancelOrderAsync">Yes</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Text"
+                                   OnClick="@(() => confirmCancel = false)">Keep it</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                                   OnClick="@(() => confirmCancel = true)">Cancel order</MudButton>
+                    }
                 }
-                else
-                {
-                    <button type="button" class="btn btn-outline-danger" @onclick="() => confirmCancel = true">Cancel order</button>
-                }
-            }
-        </div>
-    </EditForm>
+            </div>
+        </EditForm>
+    </MudPaper>
 }
 
 @code {

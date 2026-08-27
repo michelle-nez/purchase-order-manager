@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MudBlazor.Services;
 using PurchaseOrders.Data;
 using PurchaseOrders.Web.Components;
 
@@ -7,6 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddMudServices();
 
 // AddDbContextFactory, not AddDbContext - Blazor Server components are long-lived
 // and can run several operations at once. Each operation gets its own context.

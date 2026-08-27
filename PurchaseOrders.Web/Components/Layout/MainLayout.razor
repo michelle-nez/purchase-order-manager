@@ -1,23 +1,52 @@
+@using PurchaseOrders.Web
 @inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<MudThemeProvider Theme="PurchasingTheme.Theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://github.com/michelle-nez/purchase-order-manager" target="_blank">Source on GitHub</a>
-        </div>
+@* A dark bar over a persistent mini drawer - the back-office shape. Each app in
+   the portfolio uses a different layout on purpose. *@
+<MudLayout>
+    <MudAppBar Elevation="0" Dense="true">
+        <MudIconButton Icon="@Icons.Material.Outlined.MenuOpen" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="ToggleDrawer" aria-label="Toggle navigation" />
+        <MudText Typo="Typo.h6" Class="ml-2">Purchase Order Manager</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" Class="ml-3 d-none d-md-flex">
+            Procurement
+        </MudChip>
+        <MudSpacer />
+        <MudIconButton Href="https://github.com/michelle-nez/purchase-order-manager" Target="_blank"
+                       Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" />
+    </MudAppBar>
 
-        <article class="content px-4">
+    <MudDrawer @bind-Open="drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always"
+               Variant="DrawerVariant.Mini" OpenMiniOnHover="true"
+               Style="border-right:1px solid var(--mud-palette-divider);">
+        <MudNavMenu Margin="Margin.Dense" Class="pa-1">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Home</MudNavLink>
+            <MudNavLink Href="/purchase-orders" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.ReceiptLong">Purchase orders</MudNavLink>
+            <MudNavLink Href="/purchase-orders/new" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.PostAdd">New order</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    @* No pt-* class here - that would override the offset that clears the fixed AppBar. *@
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="pt-6 pb-10">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private bool drawerOpen = true;
+
+    private void ToggleDrawer() => drawerOpen = !drawerOpen;
+}
