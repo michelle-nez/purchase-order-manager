@@ -1,5 +1,18 @@
-﻿@page "/not-found"
+@page "/not-found"
 @layout MainLayout
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>Not found - Purchase Order Manager</PageTitle>
+
+<MudPaper Elevation="0" Class="pa-8 d-flex flex-column align-center"
+          Style="border:1px dashed var(--mud-palette-divider); max-width:520px; margin:0 auto;">
+    <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+    <MudText Typo="Typo.h6" Class="mt-3">Page not found</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mb-4">
+        That address does not match anything in this app. It may have been mistyped,
+        or the purchase order it pointed at has been cancelled.
+    </MudText>
+    <MudButton Href="/purchase-orders" Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Outlined.ReceiptLong">
+        Go to purchase orders
+    </MudButton>
+</MudPaper>

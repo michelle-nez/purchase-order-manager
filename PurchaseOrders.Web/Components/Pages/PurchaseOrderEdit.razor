@@ -1,10 +1,12 @@
-@page "/purchase-orders/new"
+﻿@page "/purchase-orders/new"
 @page "/purchase-orders/edit/{Id:int}"
 @using Microsoft.EntityFrameworkCore
 @using PurchaseOrders.Data
 @using PurchaseOrders.Data.Models
+@using Microsoft.Data.SqlClient
 @inject IDbContextFactory<PurchasingDbContext> DbFactory
 @inject NavigationManager Nav
+@inject ILogger<PurchaseOrderEdit> Logger
 
 <PageTitle>@(Id is null ? "New purchase order" : "Edit purchase order") - Purchase Order Manager</PageTitle>
 
@@ -129,16 +131,29 @@ else
             // dropping the user back on a list where it looks empty.
             Nav.NavigateTo(isNew ? $"/purchase-orders/{order.Id}" : "/purchase-orders");
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (IsDuplicatePoNumber(ex))
         {
-            // The unique index rejected it. Almost always a duplicate PO number.
             errorMessage = $"PO number '{order!.PoNumber}' is already in use. Pick a different one.";
+        }
+        catch (DbUpdateException ex)
+        {
+            // Any other save failure - a timeout, a dropped connection, a foreign key
+            // violation. Reporting these as a duplicate PO number sends people looking
+            // in the wrong place, so say something honest and log the real cause.
+            Logger.LogError(ex, "Failed to save purchase order {PoNumber}", order!.PoNumber);
+            errorMessage = "Could not save this purchase order. Please try again.";
         }
         finally
         {
             isSaving = false;
         }
     }
+
+    // SQL Server reports a unique index or unique constraint violation as error
+    // 2601 or 2627. Matching on the number keeps the duplicate message tied to the
+    // one failure it actually describes.
+    private static bool IsDuplicatePoNumber(DbUpdateException ex) =>
+        ex.InnerException is SqlException sql && (sql.Number == 2601 || sql.Number == 2627);
 
     private async Task CancelOrderAsync()
     {
